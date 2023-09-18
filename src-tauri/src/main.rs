@@ -5,15 +5,13 @@ use std::{env, process::Command};
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![install])
-        .invoke_handler(tauri::generate_handler![write_to_json])
-        .invoke_handler(tauri::generate_handler![read_from_json])
+        .invoke_handler(tauri::generate_handler![install,])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
 #[tauri::command]
-fn install(os: String, cmds: Vec<String>) -> bool {
+fn install(os: String, cmds: Vec<String>, password: String) -> bool {
     let mut message: bool = false;
 
     cmds.iter().for_each(|cmd: &String| match os.as_str() {
@@ -23,9 +21,12 @@ fn install(os: String, cmds: Vec<String>) -> bool {
             message = Command::new("cmd").args(args).status().unwrap().success();
         }
         "mac" => {
-            let args: Vec<&str> = cmd.split(" ").collect::<Vec<&str>>();
+            // Command to run the command in sudo
+            let sudo_cmd = format!("echo {} | sudo -S {}", &password, cmd);
 
-            message = Command::new("sudo").args(args).status().unwrap().success();
+            let args: [&str; 2] = ["-c", &sudo_cmd];
+
+            message = Command::new("sh").args(args).status().unwrap().success();
         }
         _ => {
             println!("Unsupported OS");
@@ -33,20 +34,4 @@ fn install(os: String, cmds: Vec<String>) -> bool {
     });
 
     return message;
-}
-
-#[tauri::command]
-fn write_to_json(file: String, data: String) -> bool {
-    let path = env::current_dir().unwrap();
-    let path = path.join(file);
-
-    std::fs::write(path, data).is_ok()
-}
-
-#[tauri::command]
-fn read_from_json(file: String) -> String {
-    let path = env::current_dir().unwrap();
-    let path = path.join(file);
-
-    std::fs::read_to_string(path).unwrap()
 }

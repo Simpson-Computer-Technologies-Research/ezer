@@ -3,81 +3,86 @@
   import { invoke } from "@tauri-apps/api/tauri";
   import type { EzerJson } from "$lib/types";
 
-  // The users who's repos will be shown
-  const users = ["realTristan", "Simpson-Computer-Technologies-Research"];
-
   // The data that will be shown
   let currentTab: string = "Repositories";
   let data: any = {
     Repositories: [],
   };
 
-  // Get the github repos of the users
-  const getRepos = async (user: string) => {
+  /**
+   * Get the repos of a user
+   * @param user The user to get the repos of
+   */
+  const getRepos = async (user: string): Promise<any> => {
     const res = await fetch(
       `https://api.github.com/users/${user}/repos?per_page=100`
     );
     return res.ok ? await res.json() : [];
   };
 
-  // Get the ezer.json from the repo
-  const getEzerJson = async (
-    user: string,
-    repo: string
-  ): Promise<EzerJson | null> => {
-    const res = await fetch(
-      `https://raw.githubusercontent.com/${user}/${repo}/main/ezer.json`
-    );
-    return res.ok ? await res.json() : null;
+  /**
+   * Append a basic repo in the data
+   * @param user The user of the repo
+   * @param repo The repo to append
+   */
+  const appendBasicRepo = (user: string, repo: any): void => {
+    const cloneUrl: string = `git clone https://github.com/${user}/${repo.name}.git`;
+
+    data.Repositories = [
+      ...data.Repositories,
+      {
+        ...repo,
+        install: {
+          select_dir: false,
+          mac: [cloneUrl],
+          windows: [cloneUrl],
+        },
+      },
+    ];
   };
 
-  // On mount, for every user, get the repos, ezer.json and README.md
-  onMount(async () => {
-    const cachedData: string = await invoke("read_from_json", {
-      file: "data.json",
-    });
-    data = cachedData ? JSON.parse(cachedData) : data;
+  /**
+   * Append an ezer repo in the data
+   * @param repo The repo to append
+   * @param ezerJson The ezer.json of the repo
+   */
+  const appendEzerRepo = (repo: any, ezerJson: EzerJson): void => {
+    const tabName: string = ezerJson.tab;
 
+    // Create the tab if it doesn't exist
+    if (!data[tabName]) data[tabName] = [];
+
+    // Append the repo to the tab
+    data[tabName] = [
+      ...data[tabName],
+      {
+        ...repo,
+        install: ezerJson.install,
+      },
+    ];
+  };
+
+  // The users who's repos will be shown
+  const users = ["realTristan", "Simpson-Computer-Technologies-Research"];
+
+  onMount(async () => {
     for (const user of users) {
-      const repos = await getRepos(user);
+      const repos: any[] = await getRepos(user);
 
       for (const repo of repos) {
-        const ezerJson = await getEzerJson(user, repo.name);
+        const res: Response = await fetch(
+          `https://raw.githubusercontent.com/${user}/${repo.name}/main/ezer.json`
+        );
 
-        if (!ezerJson) {
-          const cloneUrl: string = `git clone https://github.com/${user}/${repo.name}.git`;
-          const newData = {
-            ...repo,
-            install: {
-              mac: cloneUrl,
-              windows: cloneUrl,
-            },
-          };
-
-          data.Repositories = [...data.Repositories, newData];
-
+        if (!res.ok) {
+          appendBasicRepo(user, repo);
           continue;
         }
 
-        const tabName: string = ezerJson.tab;
-
-        if (!data[tabName]) data[tabName] = [];
-
-        data[tabName] = [
-          ...data[tabName],
-          {
-            ...repo,
-            install: ezerJson.install,
-          },
-        ];
+        const json = await res.json();
+        appendEzerRepo(repo, json);
       }
     }
-
-    // Save the data to a json file
-    await invoke("write_to_json", {
-      file: "data.json",
-      data: JSON.stringify(data),
-    });
   });
 </script>
 
