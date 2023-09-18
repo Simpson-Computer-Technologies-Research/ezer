@@ -16,15 +16,19 @@ fn main() {
 fn install(os: String, cmds: Vec<String>) -> bool {
     let mut message: bool = false;
 
-    cmds.iter().for_each(|cmd: &String| {
-        if os == "windows" {
+    cmds.iter().for_each(|cmd: &String| match os.as_str() {
+        "windows" => {
             let args = ["/C", cmd];
 
             message = Command::new("cmd").args(args).status().unwrap().success();
-        } else if os == "mac" {
+        }
+        "mac" => {
             let args: Vec<&str> = cmd.split(" ").collect::<Vec<&str>>();
 
             message = Command::new("sudo").args(args).status().unwrap().success();
+        }
+        _ => {
+            println!("Unsupported OS");
         }
     });
 
